@@ -1,0 +1,253 @@
+diff --git a/src/app/guards/steps.guard.ts b/src/app/guards/steps.guard.ts
+index 67cf1d6..bf3dced 100644
+--- a/src/app/guards/steps.guard.ts
++++ b/src/app/guards/steps.guard.ts
+@@ -8,7 +8,7 @@ export const stepsGuard: CanActivateFn = (route, state) => {
+   const teslaModelDetails = sharedDataService.getCurrentOptions();
+   const router = inject(Router);
+ 
+-  if (state.url === '/step2' && teslaModelDetails().selectedModel === undefined) {
++  if (state.url.includes('/step2') && teslaModelDetails().selectedModel === undefined) {
+     router.navigate(['']);
+     return false;
+   }
+diff --git a/src/app/models/teslaModels.ts b/src/app/models/teslaModels.ts
+index 2798f7c..af4a29a 100644
+--- a/src/app/models/teslaModels.ts
++++ b/src/app/models/teslaModels.ts
+@@ -1,22 +1,39 @@
+-export interface models {
++export interface Models {
+   code: string,
+   description: string,
+-  colors: modelColor[]
++  colors: ModelColor[]
+ }
+ 
+-export interface modelColor {
++export interface ModelColor {
+   code: string,
+   description: string,
+   price: number
+ }
+ 
+-export interface modelWithImage {
++export interface ModelWithImage {
+   modelCode: string;
+   modelImage: string;
+ }
+ 
+ export interface TeslaOptions{
+-  selectedModel?: models;
+-  selectedColor?: modelColor;
++  selectedModel?: Models;
++  selectedColor?: ModelColor;
+   modelImage?: string;
++  selectedConfig?: ConfigOptions;
++  includeTow?: boolean;
++  includeYoke?: boolean;
++}
++
++export interface ConfigOptions {
++  id: number;
++  description: string;
++  range: number;
++  speed: number;
++  price: number;
++}
++
++export interface TeslaConfig {
++  configs: ConfigOptions[];
++  towHitch: boolean;
++  yoke: boolean;
+ }
+diff --git a/src/app/services/shared-data.service.ts b/src/app/services/shared-data.service.ts
+index 803b109..e226778 100644
+--- a/src/app/services/shared-data.service.ts
++++ b/src/app/services/shared-data.service.ts
+@@ -1,5 +1,5 @@
+ import { Injectable, Signal, signal } from '@angular/core';
+-import { TeslaOptions, modelColor, models } from '../models/teslaModels';
++import { TeslaOptions, ModelColor, Models, ConfigOptions } from '../models/teslaModels';
+ 
+ @Injectable({
+   providedIn: 'root'
+@@ -21,7 +21,7 @@ export class SharedDataService {
+    * @param model selected model detail or undefined
+    * @param modelColor selected modelcolor or undefined
+    */
+-  setTeslaModel(model?: models, modelColor?: modelColor) {
++  setTeslaModel(model?: Models, modelColor?: ModelColor) {
+     this.selectedOptionsData.selectedModel = model;
+     this.selectedOptionsData.selectedColor = modelColor;
+ 
+@@ -37,4 +37,19 @@ export class SharedDataService {
+       }
+     });
+   }
++
++  setTeslaConfigs(config: ConfigOptions | undefined) {
++    this.teslaModelDetails.update((data) => {
++      data.selectedConfig = config;
++      return data;
++    });
++  }
++
++  setTeslaOptions(options: string) {
++    this.teslaModelDetails.update((data) => {
++      data.includeTow = (options === 'towHitch') ? true : false;
++      data.includeYoke = (options === 'yoke') ? true : false;
++      return data;
++    });
++  }
+ }
+diff --git a/src/app/services/tesla-model.service.ts b/src/app/services/tesla-model.service.ts
+index 591ff7d..39805f4 100644
+--- a/src/app/services/tesla-model.service.ts
++++ b/src/app/services/tesla-model.service.ts
+@@ -1,7 +1,7 @@
+ import { HttpClient } from '@angular/common/http';
+-import { Injectable, Signal, signal } from '@angular/core';
++import { Injectable } from '@angular/core';
+ import { Observable } from 'rxjs';
+-import { models } from '../models/teslaModels';
++import { Models, TeslaConfig } from '../models/teslaModels';
+ 
+ @Injectable({
+   providedIn: 'root'
+@@ -9,13 +9,12 @@ import { models } from '../models/teslaModels';
+ export class TeslaModelService {
+   constructor(private http: HttpClient) { }
+ 
+-  getModels(): Observable<models[]> {
+-    return this.http.get<models[]>("models");
++  getModels(): Observable<Models[]> {
++    return this.http.get<Models[]>("models");
+   }
+ 
+-  getConfigurations(modelCode: string) {
+-    debugger
+-    this.http.get('/options/'+modelCode).subscribe(console.log)
++  getConfigurations(modelCode: string): Observable<TeslaConfig> {
++    return this.http.get<TeslaConfig>('/options/'+modelCode)
+   }
+ 
+ }
+diff --git a/src/app/steps/step1/step1.component.ts b/src/app/steps/step1/step1.component.ts
+index ab683d3..f448fd6 100644
+--- a/src/app/steps/step1/step1.component.ts
++++ b/src/app/steps/step1/step1.component.ts
+@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
+ import { TeslaModelService } from '../../services/tesla-model.service';
+ import { AsyncPipe, JsonPipe, NgFor, NgIf } from '@angular/common';
+ import { Observable } from 'rxjs';
+-import { modelColor, models } from '../../models/teslaModels';
++import { ModelColor, Models } from '../../models/teslaModels';
+ import { SharedDataService } from '../../services/shared-data.service';
+ 
+ @Component({
+@@ -14,10 +14,10 @@ import { SharedDataService } from '../../services/shared-data.service';
+   styleUrl: './step1.component.scss',
+ })
+ export class Step1Component {
+-  selectedModel!: models;
+-  teslaModelList$!: Observable<models[]>;
+-  modelColorList: modelColor[] | undefined;
+-  selectedModelColors!: modelColor;
++  selectedModel!: Models;
++  teslaModelList$!: Observable<Models[]>;
++  modelColorList: ModelColor[] | undefined;
++  selectedModelColors!: ModelColor;
+ 
+   constructor(
+     private teslaService: TeslaModelService,
+@@ -28,7 +28,7 @@ export class Step1Component {
+     this.teslaModelList$ = this.teslaService.getModels()
+   }
+ 
+-  setModel(model: models | undefined) {
++  setModel(model: Models | undefined) {
+     if (model !== undefined) {
+       this.sharedData.setTeslaModel(model, model.colors[0]);
+       this.modelColorList = model.colors;
+diff --git a/src/app/steps/step2/step2.component.html b/src/app/steps/step2/step2.component.html
+index 31b66bd..8a7a39e 100644
+--- a/src/app/steps/step2/step2.component.html
++++ b/src/app/steps/step2/step2.component.html
+@@ -1 +1,24 @@
+-<p>step2 works!</p>
++<h2>Step 2: Select your config and options</h2>
++<div>
++  config:
++  <select name="configSelect" id="configSelect" [(ngModel)]="selectedConfig" (change)="setModelConfig(selectedConfig)">
++    <option selected [ngValue]="undefined">Choose...</option>
++    <option *ngFor="let configOpt of configs" [ngValue]="configOpt">
++      {{ configOpt.description }}
++    </option>
++  </select>
++
++  <p *ngIf="selectedConfig !== undefined">
++    Range: {{selectedConfig.range}} miles - Max speed: {{ selectedConfig.speed }} - Cost: {{ selectedConfig.price | currency }}
++  </p>
++
++  <div *ngIf="includeTow">
++    <label for="includeTow">Tow hitch?</label>
++    <input type="checkbox" id="includeTow" (change)="setModelOptions('towHitch')">
++  </div>
++
++  <div *ngIf="includeYoke">
++    <label for="includeYoke">Yoke steering wheel? </label>
++    <input type="checkbox" id="includeYoke" (change)="setModelOptions('yoke')">
++  </div>
++</div>
+diff --git a/src/app/steps/step2/step2.component.ts b/src/app/steps/step2/step2.component.ts
+index 1aeafa7..46a198b 100644
+--- a/src/app/steps/step2/step2.component.ts
++++ b/src/app/steps/step2/step2.component.ts
+@@ -1,19 +1,43 @@
+ import { Component, Input } from '@angular/core';
+ import { TeslaModelService } from '../../services/tesla-model.service';
++import { ConfigOptions } from '../../models/teslaModels';
++import { CommonModule } from '@angular/common';
++import { FormsModule } from '@angular/forms';
++import { SharedDataService } from '../../services/shared-data.service';
+ 
+ @Component({
+   selector: 'app-step2',
+   standalone: true,
+-  imports: [],
++  imports: [FormsModule, CommonModule],
+   templateUrl: './step2.component.html',
+   styleUrl: './step2.component.scss'
+ })
+ export class Step2Component {
+   @Input() model!: string;
++  protected includeYoke: boolean = false;
++  protected includeTow: boolean = false;
++  protected configs: ConfigOptions[] = [];
++  protected selectedConfig: ConfigOptions | undefined;
+ 
+-  constructor(private teslaModelService: TeslaModelService) { }
++  constructor(private teslaModelService: TeslaModelService, private sharedDataService: SharedDataService) { }
+ 
+   ngOnInit() {
+-    this.teslaModelService.getConfigurations(this.model)
++    this.teslaModelService.getConfigurations(this.model).subscribe((modelData) => {
++      if (modelData !== null) {
++        this.configs = modelData.configs;
++        this.includeYoke = modelData.yoke;
++        this.includeTow = modelData.towHitch;
++      }
++    })
++  }
++
++  setModelConfig(config: ConfigOptions | undefined) {
++    if (config !== undefined) {
++      this.sharedDataService.setTeslaConfigs(config);
++    }
++  }
++
++  setModelOptions(option: string) {
++    this.sharedDataService.setTeslaOptions(option);
+   }
+ }
