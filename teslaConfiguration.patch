@@ -1,0 +1,143 @@
+diff --git a/src/app/models/teslaModels.ts b/src/app/models/teslaModels.ts
+index af4a29a..42b6b91 100644
+--- a/src/app/models/teslaModels.ts
++++ b/src/app/models/teslaModels.ts
+@@ -10,11 +10,6 @@ export interface ModelColor {
+   price: number
+ }
+ 
+-export interface ModelWithImage {
+-  modelCode: string;
+-  modelImage: string;
+-}
+-
+ export interface TeslaOptions{
+   selectedModel?: Models;
+   selectedColor?: ModelColor;
+diff --git a/src/app/services/shared-data.service.ts b/src/app/services/shared-data.service.ts
+index e226778..de3dd4c 100644
+--- a/src/app/services/shared-data.service.ts
++++ b/src/app/services/shared-data.service.ts
+@@ -47,8 +47,12 @@ export class SharedDataService {
+ 
+   setTeslaOptions(options: string) {
+     this.teslaModelDetails.update((data) => {
+-      data.includeTow = (options === 'towHitch') ? true : false;
+-      data.includeYoke = (options === 'yoke') ? true : false;
++      if (options === 'towHitch') {
++        data.includeTow = true;
++      }
++      if (options === 'yoke') {
++        data.includeYoke = true
++      }
+       return data;
+     });
+   }
+diff --git a/src/app/steps/step1/step1.component.ts b/src/app/steps/step1/step1.component.ts
+index 0314dac..4e808b0 100644
+--- a/src/app/steps/step1/step1.component.ts
++++ b/src/app/steps/step1/step1.component.ts
+@@ -29,11 +29,10 @@ export class Step1Component {
+       this.teslaModelList = Model;
+ 
+       let sharedSignal = this.sharedData.getCurrentOptions();
+-      let signalData = sharedSignal();
+-      this.modelColorList = signalData.selectedModel?.colors || [];
++      this.modelColorList = sharedSignal().selectedModel?.colors || [];
+ 
+-      this.selectedModel = this.teslaModelList.find(model => model.code === signalData.selectedModel?.code);
+-      this.selectedModelColors = signalData.selectedColor;
++      this.selectedModel = this.teslaModelList.find(model => model.code === sharedSignal().selectedModel?.code);
++      this.selectedModelColors = sharedSignal().selectedColor;
+     })
+   }
+ 
+diff --git a/src/app/steps/step3/step3.component.html b/src/app/steps/step3/step3.component.html
+index f7a4b70..cf844c1 100644
+--- a/src/app/steps/step3/step3.component.html
++++ b/src/app/steps/step3/step3.component.html
+@@ -4,11 +4,11 @@
+ <div class="container">
+   <!-- car model details -->
+   <div class="row">
+-    <div class="col-6">
++    <div class="col-sm-5">
+       <b>{{ selectedTeslaData?.selectedConfig?.description }}</b>
+       <p>Range: {{ selectedTeslaData?.selectedConfig?.range }} - Max Speed: {{ selectedTeslaData?.selectedConfig?.speed }}</p>
+     </div>
+-    <div class="col-3">
++    <div class="col-sm-7">
+       {{selectedTeslaData?.selectedConfig?.price | currency }}
+     </div>
+   </div>
+@@ -16,10 +16,10 @@
+ 
+   <!-- car color details -->
+   <div class="row">
+-    <div class="col-6">
++    <div class="col-sm-5">
+       <b>{{selectedTeslaData?.selectedColor?.description }}</b>
+     </div>
+-    <div class="col-3 ml-auto">
++    <div class="col-sm-7">
+       {{selectedTeslaData?.selectedColor?.price | currency }}
+     </div>
+   </div>
+@@ -28,47 +28,36 @@
+   <!-- car options details -->
+   <div class="row">
+     <ng-template [ngIf]="selectedTeslaData?.includeTow">
+-      <div class="col-6">
++      <div class="col-sm-5">
+         <b>Tow Hitch Package</b>
+       </div>
+-      <div class="col-3">
++      <div class="col-sm-7">
+         {{1000 | currency }}
+       </div>
+     </ng-template>
+     <ng-template [ngIf]="selectedTeslaData?.includeYoke">
+-      <div class="col-6">
++      <br>
++      <div class="col-sm-5">
+         <b>Yoke Steering Wheel</b>
+       </div>
+-      <div class="col-3">
++      <div class="col-sm-7">
+         {{1000 | currency }}
+       </div>
+     </ng-template>
+   </div>
+ </div>
+ 
++<!-- total -->
+ <hr>
+ <div class="row">
+-  <div class="col-6">Total Cost</div>
+-  <div class="col-6">
++  <div class="col-sm-5">Total Cost</div>
++  <div class="col-sm-7">
+     {{ (
+       (selectedTeslaData?.selectedColor?.price || 0)
+-    + ((selectedTeslaData?.includeTow === true)?1000:0)
+-    + ((selectedTeslaData?.includeYoke === true)?1000:0)
++    + (selectedTeslaData?.includeTow === true ? 1000 : 0)
++    + (selectedTeslaData?.includeYoke === true ? 1000 : 0)
+     + (selectedTeslaData?.selectedConfig?.price || 0)
+     ) | currency }}
+   </div>
+ </div>
+ <hr>
+-<!-- <div class="container">
+-
+-  <div class="row">
+-    <hr class="col-sm-12">
+-  </div>
+-  <div class="row" *ngIf="selectedTeslaData?.selectedConfig">
+-    <div class="col-sm-5">Total Cost</div>
+-    <div class="col-sm-7">{{((selectedTeslaData?.selectedColor?.price || 0) + ((selectedTeslaData?.includeTow === true)?1000:0) + ((selectedTeslaData?.includeYoke === true)?1000:0) + (selectedTeslaData?.selectedConfig?.price || 0)) | currency }}</div>
+-  </div>
+-  <div class="row">
+-    <hr class="col-sm-12">
+-  </div>
+-</div> -->
